@@ -25,6 +25,7 @@ from lms.djangoapps.learner_recommendations.utils import (
     get_algolia_courses_recommendation,
     get_amplitude_course_recommendations,
     filter_recommended_courses,
+    get_programs_based_on_course,
     course_data_for_discovery_card,
 )
 
@@ -105,5 +106,7 @@ class AmplitudeRecommendationsView(APIView):
         )
         recommended_courses = map(course_data_for_discovery_card, filtered_courses)
         recommended_courses = recommended_courses[:recommendation_count]
-
-        return Response({"is_control": is_control, "courses": recommended_courses}, status=200)
+        program_upsell = get_programs_based_on_course(course_key, user_country_code, request.user)
+        return Response({
+            "is_control": is_control, "courses": recommended_courses, "program_upsell": program_upsell},
+            status=200)

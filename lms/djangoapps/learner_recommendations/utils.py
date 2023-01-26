@@ -9,8 +9,7 @@ from algoliasearch.search_client import SearchClient
 from django.conf import settings
 
 from common.djangoapps.student.models import CourseEnrollment
-from openedx.core.djangoapps.catalog.utils import get_course_data
-
+from openedx.core.djangoapps.catalog.utils import get_course_data, get_programs
 
 log = logging.getLogger(__name__)
 
@@ -224,3 +223,83 @@ def filter_recommended_courses(
             filtered_recommended_courses.append(course_data)
 
     return filtered_recommended_courses
+
+
+def get_programs_based_on_course(course_key, country_code, user):
+    """
+    Returns a program for the course. If a course is part of multiple programs,
+    this function returns the program with the highest price.
+    """
+    # Get the programs list for the course
+    programs = get_programs(course=course_key)
+
+    # check user is enrolled in different courses part of program
+    if programs:
+        enrollable_programs = []
+        for program in programs:
+            course_keys = []
+            for courses in program.get('courses'):
+                course_keys.append(courses.get('key'))
+            enrollable_course_keys = _remove_user_enrolled_course_keys(user, course_keys)
+            if enrollable_course_keys:
+                enrollable_programs.append(program)
+
+        non_restricted_programs = []
+        for program in enrollable_programs:
+            # Check for location restriction
+            if not _has_country_restrictions(program, country_code):
+                non_restricted_programs.append(program)
+
+        max_price_program = max(non_restricted_programs, key=lambda x: x['price_ranges'][0]['total'])
+
+        total_weeks_to_complete = 0
+        course_pacing_type = ''
+
+        for courses in max_price_program.get('courses'):
+            for course_run in courses.get('course_runs'):
+                if course_run.get('availability') in ['Current', 'Upcoming']:
+                    course_pacing_type = course_run.get("pacing_type")
+                    total_weeks_to_complete += int(course_run.get("weeks_to_complete"))
+
+        get_program_duration(total_weeks_to_complete)
+        program_upsell = {
+            "program_title": max_price_program.get('title'),
+            "marketing_url": max_price_program.get('marketing_url'),
+            "total_courses": len(max_price_program.get('courses')),
+            "pacing_type": course_pacing_type,
+            "weeks_to_complete": get_program_duration(total_weeks_to_complete),
+            "weeks_to_complete_min": max_price_program.get('weeks_to_complete_min'),
+            "weeks_to_complete_max": max_price_program.get('weeks_to_complete_max'),
+            "type": max_price_program.get('type'),
+        }
+        return program_upsell
+    else:
+        return None
+
+
+def get_program_duration(weeks):
+    """
+    Describe estimated duration of the program
+    """
+    total_months = round(weeks / 4)
+
+    if total_months < 1:
+        return f'{total_months} weeks'
+
+    if 1 <= total_months < 12:
+        return f'{total_months} months'
+
+    total_years = round(total_months / 12)
+    total_remainder_months = round(total_months % 12)
+
+    if total_remainder_months == 0:
+        return f'{total_years} years'
+
+    if total_years == 1 and total_remainder_months == 1:
+        return f'1 year {total_remainder_months} months'
+
+    if total_remainder_months == 1:
+        return f'{total_years} years 1 months'
+
+    else:
+        return f'{total_years} years {total_remainder_months} months'
