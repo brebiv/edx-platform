@@ -14,27 +14,26 @@ from openedx.core.djangoapps.catalog.utils import get_course_data
 
 log = logging.getLogger(__name__)
 
-COURSE_LEVELS = [
-    'Introductory',
-    'Intermediate',
-    'Advanced'
-]
+COURSE_LEVELS = ["Introductory", "Intermediate", "Advanced"]
 
 
 class AlgoliaClient:
-    """ Class for instantiating an Algolia search client instance. """
+    """Class for instantiating an Algolia search client instance."""
+
     algolia_client = None
     algolia_app_id = settings.ALGOLIA_APP_ID
     algolia_search_api_key = settings.ALGOLIA_SEARCH_API_KEY
 
     @classmethod
     def get_algolia_client(cls):
-        """ Get Algolia client instance. """
+        """Get Algolia client instance."""
         if not cls.algolia_client:
             if not (cls.algolia_app_id and cls.algolia_search_api_key):
                 return None
 
-            cls.algolia_client = SearchClient.create(cls.algolia_app_id, cls.algolia_search_api_key)
+            cls.algolia_client = SearchClient.create(
+                cls.algolia_app_id, cls.algolia_search_api_key
+            )
 
         return cls.algolia_client
 
@@ -51,7 +50,11 @@ def _remove_user_enrolled_course_keys(user, course_keys):
         course_key = f"{course_enrollment.course_id.org}+{course_enrollment.course_id.course}"
         user_enrolled_course_keys.add(course_key)
 
-    enrollable_course_keys = [course_key for course_key in course_keys if course_key not in user_enrolled_course_keys]
+    enrollable_course_keys = [
+        course_key
+        for course_key in course_keys
+        if course_key not in user_enrolled_course_keys
+    ]
     return enrollable_course_keys
 
 
@@ -78,10 +81,10 @@ def _has_country_restrictions(product, user_country):
         countries = location_restriction.get("countries")
         if restriction_type == "allowlist":
             allow_list = countries
-        if restriction_type == "blocklist":
+        elif restriction_type == "blocklist":
             block_list = countries
 
-    return user_country in block_list or (allow_list and user_country not in allow_list)
+    return user_country in block_list or (bool(allow_list) and user_country not in allow_list)
 
 
 def _parse_course_owner_data(owner):
@@ -91,15 +94,19 @@ def _parse_course_owner_data(owner):
     return {
         "key": owner.get("key"),
         "name": owner.get("name"),
-        "logo_image_url": owner.get("logo_image_url")
+        "logo_image_url": owner.get("logo_image_url"),
     }
 
 
 def course_data_for_discovery_card(course_data):
     """Helper method to prepare data for prospectus course card"""
     recommended_course_data = {}
-    active_course_run = [course_run for course_run in course_data.get("course_runs", [])
-                         if course_run.get("availability") == "Current"][0]
+    active_course_run = [
+        course_run
+        for course_run in course_data.get("course_runs", [])
+        if course_run.get("availability") == "Current"
+    ][0]
+
     if active_course_run:
         owners = map(_parse_course_owner_data, course_data.get("owners"))
         recommended_course_data.update({
@@ -114,6 +121,7 @@ def course_data_for_discovery_card(course_data):
                 "marketing_url": active_course_run.get("marketing_url"),
             }
         })
+
     return recommended_course_data
 
 
@@ -196,7 +204,11 @@ def get_amplitude_course_recommendations(user_id, recommendation_id):
 
 
 def filter_recommended_courses(
-    user, unfiltered_course_keys, recommendation_count=10, user_country_code=None, request_course=None
+    user,
+    unfiltered_course_keys,
+    recommendation_count=10,
+    user_country_code=None,
+    request_course=None,
 ):
     """
     Returns the filtered course recommendations. The unfiltered course keys
@@ -213,12 +225,18 @@ def filter_recommended_courses(
 
     # Remove the course keys a user is already enrolled in
     enrollable_course_keys = _remove_user_enrolled_course_keys(user, unfiltered_course_keys)
-    # If user is seeing the recommendations on a course about pages, filter that course out of recommendations
-    recommended_course_keys = [course_key for course_key in enrollable_course_keys if course_key != request_course]
+
+    # If user is seeing the recommendations on a course about page, filter that course out of recommendations
+    recommended_course_keys = [
+        course_key
+        for course_key in enrollable_course_keys
+        if course_key != request_course
+    ]
 
     for course_id in recommended_course_keys:
         if len(filtered_recommended_courses) >= recommendation_count:
             break
+
         course_data = get_course_data(course_id, fields)
         if course_data and not _has_country_restrictions(course_data, user_country_code):
             filtered_recommended_courses.append(course_data)
