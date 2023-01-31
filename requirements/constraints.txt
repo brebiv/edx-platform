@@ -75,5 +75,3 @@ pyopenssl==22.0.0
 
 
 cryptography==38.0.4 # greater version has some issues with openssl.
-
-bleach[css]==5.0.1 # greater version has some breaking changes.
